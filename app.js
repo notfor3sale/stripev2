@@ -23,10 +23,8 @@ app.post('/crear-checkout-stripe', async (req, res) => {
       return res.status(400).json({ error: 'El monto mínimo es de $30.00 MXN' });
     }
 
-    // Crear la sesión en la API de Stripe
-    const session = await stripe.checkout.sessions.create({
+    const sessionPayload = {
       payment_method_types: ['card'],
-      customer_email: email || undefined,
       line_items: [
         {
           price_data: {
@@ -41,12 +39,20 @@ app.post('/crear-checkout-stripe', async (req, res) => {
         },
       ],
       mode: 'payment',
-
       success_url: 'https://zafarparfums.com/?donacion=exito',
       cancel_url: 'https://zafarparfums.com/donar.html',
-    });
+    };
 
-    res.json({ id: session.id });
+    // Validar email antes de enviarlo
+    if (email && typeof email === 'string' && email.includes('@')) {
+      sessionPayload.customer_email = email.trim();
+    }
+
+    // Crear la sesión en la API de Stripe
+    const session = await stripe.checkout.sessions.create(sessionPayload);
+
+    // Devolvemos la URL directa generada por la API de Stripe
+    res.json({ id: session.id, url: session.url });
 
   } catch (error) {
     console.error('Error en Stripe API:', error);
