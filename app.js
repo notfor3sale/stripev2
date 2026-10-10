@@ -7,35 +7,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Tus credenciales de Clip configuradas en las variables de entorno de Render
-const CLIP_CLIENT_ID = process.env.CLIP_CLIENT_ID;
-const CLIP_CLIENT_SECRET = process.env.CLIP_CLIENT_SECRET;
-// O si manejas un usuario/contraseña o Basic Auth directo para generar el token:
+// Tu llave de Clip configurada en Render (la cadena en Base64 o con el prefijo Basic)
 const CLIP_API_KEY = process.env.CLIP_API_KEY; 
 
 app.get('/', (req, res) => {
-  res.send('API de Clip (con renovación de token) activa y funcionando.');
+  res.send('API de Clip directa activa y funcionando.');
 });
-
-// Función auxiliar para obtener un token fresco de Clip
-async function obtenerAccessToken() {
-  try {
-    // NOTA: Ajusta el endpoint de autenticación según la documentación oficial de tu versión de API de Clip
-    const authResponse = await axios.post('https://api.payclip.com/v2/oauth/token', {
-      grant_type: 'client_credentials'
-    }, {
-      headers: {
-        'Authorization': `Basic ${CLIP_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    return authResponse.data.access_token;
-  } catch (error) {
-    console.error('Error al generar el access_token de Clip:', error.response?.data || error.message);
-    throw new Error('No se pudo autenticar con la pasarela de Clip.');
-  }
-}
 
 app.post('/cobro-clip', async (req, res) => {
   try {
@@ -46,10 +23,7 @@ app.post('/cobro-clip', async (req, res) => {
       return res.status(400).json({ success: false, error: 'El monto mínimo es de $10.00 MXN' });
     }
 
-    // 1. Obtenemos un token de acceso fresco y vigente
-    const accessToken = await obtenerAccessToken();
-
-    // 2. Estructuramos el payload de la tarjeta para Clip
+    // Estructura de pago directo con la API de Clip
     const clipPayload = {
       amount: amountNum,
       currency: "MXN",
@@ -65,10 +39,12 @@ app.post('/cobro-clip', async (req, res) => {
       phone: phone
     };
 
-    // 3. Ejecutamos el cobro usando el token dinámico recién obtenido
+    // Asegurarnos de que el encabezado lleve "Basic " si guardaste solo la cadena Base64
+    const authHeader = CLIP_API_KEY.startsWith('Basic ') ? CLIP_API_KEY : `Basic ${CLIP_API_KEY}`;
+
     const response = await axios.post('https://api.payclip.com/v2/payments', clipPayload, {
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': authHeader,
         'Content-Type': 'application/json'
       }
     });
