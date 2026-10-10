@@ -7,9 +7,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Tu llave de Clip configurada en Render (la cadena en Base64 o con el prefijo Basic)
-const CLIP_API_KEY = process.env.CLIP_API_KEY; 
-
 app.get('/', (req, res) => {
   res.send('API de Clip directa activa y funcionando.');
 });
@@ -23,7 +20,6 @@ app.post('/cobro-clip', async (req, res) => {
       return res.status(400).json({ success: false, error: 'El monto mínimo es de $10.00 MXN' });
     }
 
-    // Estructura de pago directo con la API de Clip
     const clipPayload = {
       amount: amountNum,
       currency: "MXN",
@@ -39,8 +35,9 @@ app.post('/cobro-clip', async (req, res) => {
       phone: phone
     };
 
-    // Asegurarnos de que el encabezado lleve "Basic " si guardaste solo la cadena Base64
-    const authHeader = CLIP_API_KEY.startsWith('Basic ') ? CLIP_API_KEY : `Basic ${CLIP_API_KEY}`;
+    // Usamos la llave limpia y le ponemos el prefijo Basic
+    const rawKey = (process.env.CLIP_API_KEY || '').replace(/^Basic\s+/i, '').trim();
+    const authHeader = `Basic ${rawKey}`;
 
     const response = await axios.post('https://api.payclip.com/v2/payments', clipPayload, {
       headers: {
@@ -52,7 +49,7 @@ app.post('/cobro-clip', async (req, res) => {
     res.json({ success: true, data: response.data });
 
   } catch (error) {
-    console.error('Error en API de Clip:', error.response?.data || error.message);
+    console.error('Error detallado de Clip:', error.response?.data || error.message);
     res.status(500).json({ 
       success: false, 
       error: error.response?.data?.message || error.message || 'Error al procesar el pago con Clip' 
