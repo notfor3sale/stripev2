@@ -1,66 +1,59 @@
 const express = require('express');
 const cors = require('cors');
-
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const axios = require('axios');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
+// Tus llaves de Clip (guárdalas en las variables de entorno de Render)
+// CLIP_API_KEY o CLIP_TOKEN_KEY
+const CLIP_API_KEY = process.env.CLIP_API_KEY; 
+
 app.get('/', (req, res) => {
-  res.send('API de Stripe activa y funcionando.');
+  res.send('API de Clip activa y funcionando.');
 });
 
-// Endpoint para crear la sesión de Checkout / Donación
-app.post('/crear-checkout-stripe', async (req, res) => {
+app.post('/cobro-clip', async (req, res) => {
   try {
-    const { amount, email } = req.body;
+    const { amount, token_id, email, description } = req.body;
 
-    const amountInCents = Math.round(parseFloat(amount) * 100);
-
-    if (!amountInCents || amountInCents < 3000) { 
-      return res.status(400).json({ error: 'El monto mínimo es de $30.00 MXN' });
+    const amountNum = parseFloat(amount);
+    if (!amountNum || amountNum < 10) {
+      return res.status(400).json({ success: false, error: 'El monto mínimo es de $10.00 MXN' });
     }
 
-    const sessionPayload = {
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price_data: {
-            currency: 'mxn',
-            product_data: {
-              name: 'Aportación Voluntaria',
-              description: 'Gracias por apoyar nuestro proyecto',
-            },
-            unit_amount: amountInCents,
-          },
-          quantity: 1,
-        },
-      ],
-      mode: 'payment',
-      success_url: 'https://zafarparfums.com/?donacion=exito',
-      cancel_url: 'https://zafarparfums.com/donar.html',
+    // Estructura de pago directo con la API de Clip (Payload estándar)
+    const clipPayload = {
+      amount: amountNum,
+      currency: "MXN",
+      concept: description || "Pago en línea",
+      token_id: token_id, // El token generado en el frontend con la Public Key de Clip
+      receipt_email: email || "cliente@correo.com"
     };
 
-    // Validar email antes de enviarlo
-    if (email && typeof email === 'string' && email.includes('@')) {
-      sessionPayload.customer_email = email.trim();
-    }
+    // Petición al endpoint de pagos de Clip (Producción o Staging según corresponda)
+    // Nota: Revisa si usas el endpoint de API V2 o V3 de Clip
+    const response = await axios.post('https://api.payclip.com/v2/payments', clipPayload, {
+      headers: {
+        'Authorization': `Basic ${CLIP_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
 
-    // Crear la sesión en la API de Stripe
-    const session = await stripe.checkout.sessions.create(sessionPayload);
-
-    // Devolvemos la URL directa generada por la API de Stripe
-    res.json({ id: session.id, url: session.url });
+    res.json({ success: true, data: response.data });
 
   } catch (error) {
-    console.error('Error en Stripe API:', error);
-    res.status(500).json({ error: error.message || 'Error al procesar con Stripe' });
+    console.error('Error en API de Clip:', error.response?.data || error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: error.response?.data?.message || 'Error al procesar el pago con Clip' 
+    });
   }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Servidor de Stripe activo en puerto ${PORT}`);
+  console.log(`Servidor Clip activo en puerto ${PORT}`);
 });
