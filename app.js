@@ -11,7 +11,7 @@ app.get('/', (req, res) => {
   res.send('API de Clip Checkout activo y funcionando.');
 });
 
-// Función para obtener el token de autorización (Soporta Pruebas directo y Producción por OAuth)
+// Función para obtener el token o llave de autorización adecuada
 async function obtenerTokenAutorizacion() {
   let rawKey = (process.env.CLIP_API_KEY || '').trim();
 
@@ -19,7 +19,7 @@ async function obtenerTokenAutorizacion() {
     throw new Error('La variable CLIP_API_KEY no está configurada en las variables de entorno.');
   }
 
-  // Si la llave empieza con 'test_', es una credencial de prueba y se usa directo como Bearer
+  // Si la llave empieza con 'test_', es de prueba y se usa directamente
   if (rawKey.startsWith('test_')) {
     return {
       token: rawKey,
@@ -27,7 +27,7 @@ async function obtenerTokenAutorizacion() {
     };
   }
 
-  // Si es de producción, hace el flujo OAuth tradicional con Client ID / Secret en Base64
+  // Si es de producción, realiza el flujo OAuth tradicional con Client ID / Secret en Base64
   let cleanKey = rawKey.replace(/^Basic\s+/i, '').trim();
   const authResponse = await axios.post('https://api-gw.payclip.com/v2/oauth/token', {
     grant_type: 'client_credentials'
@@ -53,7 +53,7 @@ app.post('/cobro-clip', async (req, res) => {
       return res.status(400).json({ success: false, error: 'El monto mínimo es de $10.00 MXN' });
     }
 
-    // 1. Obtenemos el token o credencial adecuada
+    // 1. Obtenemos la autenticación correcta
     const authData = await obtenerTokenAutorizacion();
 
     // 2. Preparamos el payload del checkout
@@ -82,20 +82,13 @@ app.post('/cobro-clip', async (req, res) => {
       }
     };
 
-    // 3. Seleccionamos el endpoint correcto (Sandbox vs Producción)
-    const checkoutUrl = authData.isTest 
-      ? 'https://dev-api.payclip.com/v2/checkout' 
-      : 'https://api.payclip.com/v2/checkout';
-
-    // Para ambiente de pruebas, la documentación pide 'Bearer [test_key]'
-    const authHeaderValue = authData.isTest 
-      ? `Bearer ${authData.token}` 
-      : `Bearer ${authData.token}`;
+    // 3. Endpoint principal de Clip V2 (enruta automáticamente según el tipo de llave)
+    const checkoutUrl = 'https://api.payclip.com/v2/checkout';
 
     // 4. Solicitamos la creación del link de pago a Clip
     const response = await axios.post(checkoutUrl, checkoutPayload, {
       headers: {
-        'Authorization': authHeaderValue,
+        'Authorization': `Bearer ${authData.token}`,
         'Content-Type': 'application/json',
         'accept': 'application/json'
       }
