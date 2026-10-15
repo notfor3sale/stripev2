@@ -25,25 +25,34 @@ app.post('/cobro-directo-clip', async (req, res) => {
       return res.status(500).json({ success: false, error: 'La variable CLIP_API_KEY no está configurada.' });
     }
 
-    // 1. Crear Token de Tarjeta directamente en la API de Clip
+    // Limpiamos cualquier prefijo previo si existía
+    const cleanKey = rawKey.replace(/^(Basic|Bearer)\s+/i, '').trim();
+
+    // Generamos el header Basic Auth requerido para /v1/tokens (formato API_KEY:)
+    const basicAuthHeader = `Basic ${Buffer.from(`${cleanKey}:`).toString('base64')}`;
+
+    // 1. Crear Token de Tarjeta en Clip
     const tokenPayload = {
       card_number: cardNumber.replace(/\s+/g, ''),
-      expiration_month: expirationMonth.padStart(2, '0'),
+      expiration_month: expirationMonth.toString().padStart(2, '0'),
       expiration_year: expirationYear.length === 4 ? expirationYear.slice(-2) : expirationYear,
-      cvc: cvc,
+      cvc: cvc.toString(),
       holder_name: cardHolderName || "Titular"
     };
 
+    console.log('Solicitando token a Clip con llave:', cleanKey.substring(0, 8) + '...');
+
     const tokenResponse = await axios.post('https://api.payclip.com/v1/tokens', tokenPayload, {
       headers: {
-        'Authorization': `Bearer ${rawKey}`,
+        'Authorization': basicAuthHeader,
+        'x-api-key': cleanKey,
         'Content-Type': 'application/json'
       }
     });
 
     const cardToken = tokenResponse.data.id;
 
-    // 2. Procesar el pago con el token generado
+    // 2. Procesar el Pago
     const nameParts = (cardHolderName || 'Cliente').trim().split(' ');
     const firstName = nameParts[0];
     const lastName = nameParts.slice(1).join(' ') || 'General';
@@ -65,7 +74,8 @@ app.post('/cobro-directo-clip', async (req, res) => {
 
     const paymentResponse = await axios.post('https://api.payclip.com/payments', paymentPayload, {
       headers: {
-        'Authorization': `Bearer ${rawKey}`,
+        'Authorization': `Bearer ${cleanKey}`,
+        'x-api-key': cleanKey,
         'Content-Type': 'application/json'
       }
     });
@@ -81,7 +91,7 @@ app.post('/cobro-directo-clip', async (req, res) => {
 
     res.status(500).json({
       success: false,
-      error: error.response?.data?.message || error.response?.data?.error_detail || error.message || 'Error al procesar el pago con Clip'
+      error: error.response?.data?.message || error.response?.data?.error_detail || error.message || 'Error al procesar el pago'
     });
   }
 });
