@@ -11,6 +11,30 @@ app.get('/', (req, res) => {
   res.send('API de Pago Directo con Clip activa.');
 });
 
+// Función para obtener un token de acceso OAuth fresco
+async function obtenerAccessToken() {
+  let rawKey = (process.env.CLIP_API_KEY || '').trim();
+  if (!rawKey) {
+    throw new Error('La variable CLIP_API_KEY no está configurada en Render.');
+  }
+
+  const cleanKey = rawKey.replace(/^(Basic|Bearer)\s+/i, '').trim();
+  const basicAuth = cleanKey.includes(':') 
+    ? `Basic ${Buffer.from(cleanKey).toString('base64')}` 
+    : `Basic ${Buffer.from(`${cleanKey}:`).toString('base64')}`;
+
+  const authResponse = await axios.post('https://api-gw.payclip.com/v2/oauth/token', {
+    grant_type: 'client_credentials'
+  }, {
+    headers: {
+      'Authorization': basicAuth,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  return authResponse.data.access_token;
+}
+
 app.post('/cobro-directo-clip', async (req, res) => {
   try {
     const { cardNumber, expirationMonth, expirationYear, cvc, cardHolderName, amount, description, email, phone } = req.body;
@@ -20,23 +44,8 @@ app.post('/cobro-directo-clip', async (req, res) => {
       return res.status(400).json({ success: false, error: 'El monto mínimo es de $10.00 MXN' });
     }
 
-    let rawKey = (process.env.CLIP_API_KEY || '').trim();
-    if (!rawKey) {
-      return res.status(500).json({ success: false, error: 'La variable CLIP_API_KEY no está configurada en Render.' });
-    }
-
-    // Limpieza de llave
-    const cleanKey = rawKey.replace(/^(Basic|Bearer)\s+/i, '').trim();
-
-    // Si tu llave de pruebas requiere la clave secreta combinada (API_KEY:SECRET_KEY), 
-    // asegúrate de que esté configurada con ambos valores separados por dos puntos (:) en Render.
-    let authHeader;
-    if (cleanKey.includes(':')) {
-      authHeader = `Basic ${Buffer.from(cleanKey).toString('base64')}`;
-    } else {
-      // Si solo es la API Key de pruebas suelta, probamos enviándola en x-api-key y Bearer
-      authHeader = `Bearer ${cleanKey}`;
-    }
+    // 1. Obtener un token de acceso OAuth vigente
+    const accessToken = await obtenerAccessToken();
 
     const tokenPayload = {
       card_number: cardNumber.replace(/\s+/g, ''),
@@ -46,21 +55,17 @@ app.post('/cobro-directo-clip', async (req, res) => {
       holder_name: cardHolderName || "Titular"
     };
 
-    console.log('--- ENVIANDO TOKEN A CLIP ---');
-    console.log('Autenticación usada:', authHeader.substring(0, 15) + '...');
-
-    // 1. Crear Token de Tarjeta en Clip
+    // 2. Tokenizar la tarjeta usando el token de acceso vigente
     const tokenResponse = await axios.post('https://api.payclip.com/v1/tokens', tokenPayload, {
       headers: {
-        'Authorization': authHeader,
-        'x-api-key': cleanKey,
+        'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       }
     });
 
     const cardToken = tokenResponse.data.id;
 
-    // 2. Procesar el Pago
+    // 3. Procesar el pago
     const nameParts = (cardHolderName || 'Cliente').trim().split(' ');
     const firstName = nameParts[0];
     const lastName = nameParts.slice(1).join(' ') || 'General';
@@ -82,8 +87,7 @@ app.post('/cobro-directo-clip', async (req, res) => {
 
     const paymentResponse = await axios.post('https://api.payclip.com/payments', paymentPayload, {
       headers: {
-        'Authorization': `Bearer ${cleanKey}`,
-        'x-api-key': cleanKey,
+        'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       }
     });
@@ -94,7 +98,7 @@ app.post('/cobro-directo-clip', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('--- ERROR DETALLADO DE CLIP (401/403) ---');
+    console.error('--- ERROR DETALLADO DE CLIP ---');
     if (error.response) {
       console.error('Status:', error.response.status);
       console.error('Data:', JSON.stringify(error.response.data, null, 2));
