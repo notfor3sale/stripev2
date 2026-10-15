@@ -33,7 +33,7 @@ async function obtenerAccessToken() {
 
 app.post('/cobro-clip', async (req, res) => {
   try {
-    const { amount, description, email, phone } = req.body;
+    const { amount, description, email, phone, name } = req.body;
 
     const amountNum = parseFloat(amount);
     if (!amountNum || amountNum < 10) {
@@ -43,15 +43,29 @@ app.post('/cobro-clip', async (req, res) => {
     // 1. Obtenemos el token de acceso con OAuth
     const accessToken = await obtenerAccessToken();
 
-    // 2. Preparamos el payload exacto para /v2/checkout
+    // 2. Preparamos el payload completo estructurado para el checkout de Clip
     const checkoutPayload = {
       amount: amountNum,
       currency: "MXN",
       purchase_description: description || "Pago en línea",
       redirection_url: {
-        success: "https://frontdigit.net/", // URL a donde regresa si el pago es exitoso
-        error: "https://frontdigit.net/",   // URL si ocurre un error
+        success: "https://frontdigit.net/",
+        error: "https://frontdigit.net/",
         default: "https://frontdigit.net/"
+      },
+      override_settings: {
+        locale: "es-MX",
+        tip_enabled: false,
+        merchant_info: {
+          show_contact_info: true
+        }
+      },
+      metadata: {
+        customer_info: {
+          name: name || "Cliente",
+          email: email || "cliente@email.com",
+          phone: phone || "5512345678"
+        }
       }
     };
 
@@ -64,8 +78,15 @@ app.post('/cobro-clip', async (req, res) => {
       }
     });
 
-    // La respuesta de Clip incluye la URL de pago para redirigir al usuario
-    res.json({ success: true, data: response.data });
+    // 4. Extraemos exactamente la URL de pago de la respuesta de Clip
+    const paymentUrl = response.data.payment_request_url;
+
+    // 5. Devolvemos la URL limpia hacia el frontend
+    res.json({ 
+      success: true, 
+      payment_url: paymentUrl,
+      data: response.data 
+    });
 
   } catch (error) {
     console.error('Error detallado de Clip Checkout:', error.response?.data || error.message);
