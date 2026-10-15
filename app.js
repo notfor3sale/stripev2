@@ -8,10 +8,10 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => {
-  res.send('API de Clip Checkout activo y funcionando.');
+  res.send('API de Clip Checkout (Sandbox) activo y funcionando.');
 });
 
-// Función para obtener un access_token fresco antes de crear el link de pago
+// Función para obtener un access_token (detecta automáticamente si es Producción o Pruebas)
 async function obtenerAccessToken() {
   let rawKey = (process.env.CLIP_API_KEY || '').replace(/^Basic\s+/i, '').trim();
 
@@ -19,7 +19,15 @@ async function obtenerAccessToken() {
     throw new Error('La variable CLIP_API_KEY no está configurada en las variables de entorno.');
   }
 
-  const authResponse = await axios.post('https://api-gw.payclip.com/v2/oauth/token', {
+  // Si la llave empieza con 'test_', usamos la URL de autenticación de pruebas de Clip
+  const esPrueba = rawKey.startsWith('test_');
+  const authUrl = esPrueba 
+    ? 'https://dev-api.payclip.com/v2/oauth/token' // O el dominio de auth de pruebas que indique tu panel
+    : 'https://api-gw.payclip.com/v2/oauth/token';
+
+  // Nota: Para autenticarte en Basic Auth con Clip, se usa Base64(Client_ID:Client_Secret)
+  // Asegúrate de que en Render tengas configurada tu CLIP_API_KEY ya codificada en Base64
+  const authResponse = await axios.post(authUrl, {
     grant_type: 'client_credentials'
   }, {
     headers: {
@@ -40,14 +48,17 @@ app.post('/cobro-clip', async (req, res) => {
       return res.status(400).json({ success: false, error: 'El monto mínimo es de $10.00 MXN' });
     }
 
-    // 1. Obtenemos el token de acceso con OAuth
+    let rawKey = (process.env.CLIP_API_KEY || '').trim();
+    const esPrueba = rawKey.startsWith('test_');
+
+    // 1. Obtenemos el token de acceso
     const accessToken = await obtenerAccessToken();
 
-    // 2. Preparamos el payload completo estructurado para el checkout de Clip
+    // 2. Preparamos el payload del checkout
     const checkoutPayload = {
       amount: amountNum,
       currency: "MXN",
-      purchase_description: description || "Pago en línea",
+      purchase_description: description || "Pago de prueba",
       redirection_url: {
         success: "https://frontdigit.net/",
         error: "https://frontdigit.net/",
@@ -62,15 +73,20 @@ app.post('/cobro-clip', async (req, res) => {
       },
       metadata: {
         customer_info: {
-          name: name || "Cliente",
-          email: email || "cliente@email.com",
+          name: name || "Cliente de Prueba",
+          email: email || "test@email.com",
           phone: phone || "5512345678"
         }
       }
     };
 
-    // 3. Solicitamos la creación del link de pago a Clip
-    const response = await axios.post('https://api.payclip.com/v2/checkout', checkoutPayload, {
+    // 3. Seleccionamos el endpoint correcto (Producción vs Pruebas)
+    const checkoutUrl = esPrueba 
+      ? 'https://dev-api.payclip.com/v2/checkout' 
+      : 'https://api.payclip.com/v2/checkout';
+
+    // 4. Solicitamos la creación del link de pago
+    const response = await axios.post(checkoutUrl, checkoutPayload, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
@@ -78,10 +94,8 @@ app.post('/cobro-clip', async (req, res) => {
       }
     });
 
-    // 4. Extraemos exactamente la URL de pago de la respuesta de Clip
     const paymentUrl = response.data.payment_request_url;
 
-    // 5. Devolvemos la URL limpia hacia el frontend
     res.json({ 
       success: true, 
       payment_url: paymentUrl,
