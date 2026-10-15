@@ -8,35 +8,40 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => {
-  res.send('API de Clip Checkout (Sandbox) activo y funcionando.');
+  res.send('API de Clip Checkout activo y funcionando.');
 });
 
-// Función para obtener un access_token (detecta automáticamente si es Producción o Pruebas)
-async function obtenerAccessToken() {
-  let rawKey = (process.env.CLIP_API_KEY || '').replace(/^Basic\s+/i, '').trim();
+// Función para obtener el token de autorización (Soporta Pruebas directo y Producción por OAuth)
+async function obtenerTokenAutorizacion() {
+  let rawKey = (process.env.CLIP_API_KEY || '').trim();
 
   if (!rawKey) {
     throw new Error('La variable CLIP_API_KEY no está configurada en las variables de entorno.');
   }
 
-  // Si la llave empieza con 'test_', usamos la URL de autenticación de pruebas de Clip
-  const esPrueba = rawKey.startsWith('test_');
-  const authUrl = esPrueba 
-    ? 'https://dev-api.payclip.com/v2/oauth/token' // O el dominio de auth de pruebas que indique tu panel
-    : 'https://api-gw.payclip.com/v2/oauth/token';
+  // Si la llave empieza con 'test_', es una credencial de prueba y se usa directo como Bearer
+  if (rawKey.startsWith('test_')) {
+    return {
+      token: rawKey,
+      isTest: true
+    };
+  }
 
-  // Nota: Para autenticarte en Basic Auth con Clip, se usa Base64(Client_ID:Client_Secret)
-  // Asegúrate de que en Render tengas configurada tu CLIP_API_KEY ya codificada en Base64
-  const authResponse = await axios.post(authUrl, {
+  // Si es de producción, hace el flujo OAuth tradicional con Client ID / Secret en Base64
+  let cleanKey = rawKey.replace(/^Basic\s+/i, '').trim();
+  const authResponse = await axios.post('https://api-gw.payclip.com/v2/oauth/token', {
     grant_type: 'client_credentials'
   }, {
     headers: {
-      'Authorization': `Basic ${rawKey}`,
+      'Authorization': `Basic ${cleanKey}`,
       'Content-Type': 'application/json'
     }
   });
 
-  return authResponse.data.access_token;
+  return {
+    token: authResponse.data.access_token,
+    isTest: false
+  };
 }
 
 app.post('/cobro-clip', async (req, res) => {
@@ -48,17 +53,14 @@ app.post('/cobro-clip', async (req, res) => {
       return res.status(400).json({ success: false, error: 'El monto mínimo es de $10.00 MXN' });
     }
 
-    let rawKey = (process.env.CLIP_API_KEY || '').trim();
-    const esPrueba = rawKey.startsWith('test_');
-
-    // 1. Obtenemos el token de acceso
-    const accessToken = await obtenerAccessToken();
+    // 1. Obtenemos el token o credencial adecuada
+    const authData = await obtenerTokenAutorizacion();
 
     // 2. Preparamos el payload del checkout
     const checkoutPayload = {
       amount: amountNum,
       currency: "MXN",
-      purchase_description: description || "Pago de prueba",
+      purchase_description: description || "Pago Web Fortacero",
       redirection_url: {
         success: "https://frontdigit.net/",
         error: "https://frontdigit.net/",
@@ -73,22 +75,27 @@ app.post('/cobro-clip', async (req, res) => {
       },
       metadata: {
         customer_info: {
-          name: name || "Cliente de Prueba",
-          email: email || "test@email.com",
+          name: name || "Cliente",
+          email: email || "cliente@email.com",
           phone: phone || "5512345678"
         }
       }
     };
 
-    // 3. Seleccionamos el endpoint correcto (Producción vs Pruebas)
-    const checkoutUrl = esPrueba 
+    // 3. Seleccionamos el endpoint correcto (Sandbox vs Producción)
+    const checkoutUrl = authData.isTest 
       ? 'https://dev-api.payclip.com/v2/checkout' 
       : 'https://api.payclip.com/v2/checkout';
 
-    // 4. Solicitamos la creación del link de pago
+    // Para ambiente de pruebas, la documentación pide 'Bearer [test_key]'
+    const authHeaderValue = authData.isTest 
+      ? `Bearer ${authData.token}` 
+      : `Bearer ${authData.token}`;
+
+    // 4. Solicitamos la creación del link de pago a Clip
     const response = await axios.post(checkoutUrl, checkoutPayload, {
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': authHeaderValue,
         'Content-Type': 'application/json',
         'accept': 'application/json'
       }
