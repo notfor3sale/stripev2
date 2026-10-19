@@ -17,6 +17,7 @@ app.post('/crear-checkout-whop', async (req, res) => {
     // ID principal en WHOP
     const planId = "plan_gGxlNUyw07uXA"; // Plan de $2799 MXN
     const planId = "plan_aXFJiRdgP8ip9"; // Plan de $599 MXN
+    const planId = "plan_ZLAkMmAd62m7n"; // Plan de $50 MXN
     
 
     res.json({
