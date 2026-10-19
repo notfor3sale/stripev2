@@ -12,17 +12,11 @@ app.get('/', (req, res) => {
 
 app.post('/crear-checkout-whop', async (req, res) => {
   try {
-    const { amount, description, email, name } = req.body;
-
-    // ID principal en WHOP
-    const planId = "plan_gGxlNUyw07uXA"; // Plan de $2799 MXN
-    const planId = "plan_aXFJiRdgP8ip9"; // Plan de $599 MXN
-    const planId = "plan_ZLAkMmAd62m7n"; // Plan de $50 MXN
-    
+    const { amount, description, email, name, planId } = req.body;
 
     res.json({
       success: true,
-      planId: planId,
+      planId: planId || "plan_aXFJiRdgP8ip9", // Por defecto usa el principal si no se envía
       amount: amount,
       email: email,
       name: name
