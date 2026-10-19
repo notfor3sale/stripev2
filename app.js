@@ -10,15 +10,15 @@ app.get('/', (req, res) => {
   res.send('API Frontdigit - Whop Integration Active');
 });
 
-// Endpoint para preparar el checkout embebido
 app.post('/crear-checkout-whop', async (req, res) => {
   try {
     const { amount, description, email, name } = req.body;
 
-    // Tu Plan ID principal en Whop
-    const planId = "plan_aXFJiRdgP8ip9";
+    // ID principal en WHOP
+    const planId = "plan_gGxlNUyw07uXA"; // Plan de $2799 MXN
+    const planId = "plan_aXFJiRdgP8ip9"; // Plan de $599 MXN
+    
 
-    // Retornamos el planId y la información para inicializar el componente embebido
     res.json({
       success: true,
       planId: planId,
