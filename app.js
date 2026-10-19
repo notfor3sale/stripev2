@@ -1,57 +1,18 @@
 const express = require('express');
 const cors = require('cors');
-const axios = require('axios');
 
 const app = express();
 
+// Habilitar CORS y parseo de JSON
 app.use(cors());
 app.use(express.json());
 
+// Verificación de estado del servidor
 app.get('/', (req, res) => {
   res.send('API Frontdigit - Whop Integration Active');
 });
 
-// Endpoint para crear el enlace de pago en Whop
-app.post('/crear-checkout-whop', async (req, res) => {
-  try {
-    const { email, amount, description } = req.body;
-
-    const apiKey = process.env.WHOP_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Falta configurar la variable WHOP_API_KEY en Render.' 
-      });
-    }
-
-    // Petición a la API de Whop para generar una sesión de checkout
-    const response = await axios.post('https://api.whop.com/v5/checkout_sessions', {
-      amount: Math.round(amount * 100), // Monto expresado en centavos
-      currency: 'usd', // O la divisa configurada en tu panel
-      description: description || 'Pago Fortacero',
-      email: email
-    }, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    res.json({
-      success: true,
-      checkoutUrl: response.data.url || response.data.checkout_url
-    });
-
-  } catch (error) {
-    console.error('Error al crear el checkout de Whop:', error.response?.data || error.message);
-    res.status(500).json({
-      success: false,
-      error: error.response?.data?.message || 'Error al conectar con la pasarela de Whop.'
-    });
-  }
-});
-
-// Webhook para escuchar el éxito del pago
+// Webhook para escuchar la confirmación de pago enviada por Whop
 app.post('/webhook-whop', (req, res) => {
   try {
     const event = req.body;
@@ -59,18 +20,20 @@ app.post('/webhook-whop', (req, res) => {
 
     if (event.action === 'payment.succeeded' || event.type === 'payment.succeeded') {
       const paymentData = event.data;
-      console.log('¡Pago confirmado en Whop!');
+      console.log('¡Pago de Fortacero confirmado exitosamente!');
       console.log('ID Transacción:', paymentData.id);
+      console.log('Monto:', paymentData.amount);
+      console.log('Email Cliente:', paymentData.email);
     }
 
     res.status(200).json({ received: true });
   } catch (error) {
-    console.error('Error en Webhook:', error.message);
-    res.status(500).json({ error: 'Webhook Error' });
+    console.error('Error procesando Webhook de Whop:', error.message);
+    res.status(500).json({ error: 'Error interno en el Webhook' });
   }
 });
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`Servidor de pagos activo en puerto ${PORT}`);
+  console.log(`Servidor de pagos escuchando en el puerto ${PORT}`);
 });
