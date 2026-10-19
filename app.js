@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const axios = require('axios');
 
 const app = express();
 
@@ -11,82 +10,48 @@ app.get('/', (req, res) => {
   res.send('API Frontdigit - Whop Integration Active');
 });
 
-// Endpoint para generar el enlace de pago seguro en Whop
+// Endpoint para preparar el checkout embebido
 app.post('/crear-checkout-whop', async (req, res) => {
   try {
-    const { amount, description, email, name, phone } = req.body;
+    const { amount, description, email, name } = req.body;
 
-    const apiKey = process.env.WHOP_API_KEY;
-    if (!apiKey) {
-      console.error('ERROR: No existe WHOP_API_KEY en Render.');
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Falta configurar WHOP_API_KEY en Render.' 
-      });
-    }
+    // Tu Plan ID principal en Whop
+    const planId = "plan_aXFJiRdgP8ip9";
 
-    const planId = "plan_aXFJiRdgP8ip9"; // Tu Plan ID
-
-    console.log(`--- SOLICITUD DE CHECKOUT FORTEACERO ---`);
-    console.log(`Cliente: ${name} | Email: ${email} | Monto: $${amount}`);
-
-    // Intentamos crear un Payment Link mediante la API v5 de Whop
-    const response = await axios.post('https://api.whop.com/v5/payment_links', {
-      plan_id: planId,
-      metadata: {
-        amount_requested: amount,
-        cliente_nombre: name,
-        cliente_telefono: phone,
-        concepto: description || "Pago Fortacero"
-      }
-    }, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    const checkoutUrl = response.data.url || response.data.direct_link;
-
+    // Retornamos el planId y la información para inicializar el componente embebido
     res.json({
       success: true,
-      checkoutUrl: checkoutUrl
+      planId: planId,
+      amount: amount,
+      email: email,
+      name: name
     });
 
   } catch (error) {
-    console.error('--- ERROR EN API DE WHOP ---', error.response?.data || error.message);
-
-    // Fallback: Si la API de Payment Links no está habilitada en la cuenta, 
-    // redirigimos al checkout directo del plan en Whop pasando el email
-    const planId = "plan_aXFJiRdgP8ip9";
-    const directUrl = `https://whop.com/checkout/${planId}?email=${encodeURIComponent(req.body.email || '')}`;
-
-    console.log('Usando enlace directo de checkout:', directUrl);
-
-    res.json({
-      success: true,
-      checkoutUrl: directUrl
+    console.error('Error al preparar checkout:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Error al preparar la transacción.'
     });
   }
 });
 
-// Webhook para escuchar confirmaciones de pago de Whop
+// Webhook para escuchar confirmaciones de pago
 app.post('/webhook-whop', (req, res) => {
   try {
     const event = req.body;
-    console.log('--- EVENTO WEBHOOK DE WHOP RECIBIDO ---');
+    console.log('--- EVENTO WEBHOOK RECIBIDO DE WHOP ---');
 
     if (event.action === 'payment.succeeded' || event.type === 'payment.succeeded') {
       const paymentData = event.data;
       console.log('¡Pago confirmado en Whop!');
       console.log('ID Transacción:', paymentData.id);
-      console.log('Monto:', paymentData.amount);
     }
 
     res.status(200).json({ received: true });
   } catch (error) {
     console.error('Error en Webhook:', error.message);
-    res.status(500).json({ error: 'Webhook Error' });
+    res.status(500).json({ error: 'Error interno en Webhook' });
   }
 });
 
