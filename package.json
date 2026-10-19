@@ -1,7 +1,7 @@
 {
   "name": "stripe-api-zafar",
   "version": "1.0.0",
-  "description": "Backend API",
+  "description": "Backend API Fortacero / Whop",
   "main": "app.js",
   "scripts": {
     "start": "node app.js"
