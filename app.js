@@ -11,7 +11,7 @@ const enlacesDePago = {};
 
 // Mapeo de planes configurados en Whop
 const PLANES_WHOP = {
-    "99.97": "plan_fwV1mdwQ6H5Fg",
+    "99.97": "plan_DRkLGCX5G4zCQ",
     "1298.58": "plan_fwV1mdwQ6H5Fg",
     "2599.00": "plan_zop6zlBii6FLf",
     "4189.99": "plan_zlwuyJj8reORC",
