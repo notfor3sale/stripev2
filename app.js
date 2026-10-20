@@ -11,9 +11,11 @@ const enlacesDePago = {};
 
 // Mapeo de planes configurados en Whop
 const PLANES_WHOP = {
-    "50": "plan_ZLAkMmAd62m7n",
-    "599": "plan_gGxlNUyw07uXA",
-    "2799": "plan_aXFJiRdgP8ip9"
+    "1298.58": "plan_fwV1mdwQ6H5Fg",
+    "2599.00": "plan_zop6zlBii6FLf",
+    "4189.99": "plan_zlwuyJj8reORC",
+    "5679.00": "plan_Gmp6AQtPf8o8s",
+    "8499.20": "plan_BWm0xc3vPc2as",
 };
 
 // Generador de cadenas alfanuméricas limpias (ej. Aq6o5z8Vd5izvD)
@@ -56,7 +58,7 @@ app.post('/api/crear-referencia', (req, res) => {
         res.json({
             success: true,
             referencia: nuevaRef,
-            url: `https://frontdigit.net/payment/?ref=${nuevaRef}`
+            url: `https://losangelestour.lat/payment/?ref=${nuevaRef}`
         });
     } catch (error) {
         console.error('Error al crear referencia:', error.message);
