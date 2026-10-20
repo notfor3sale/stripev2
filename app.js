@@ -50,10 +50,11 @@ app.post('/api/crear-referencia', (req, res) => {
             creado: new Date()
         };
 
+        // Actualizado para apuntar explícitamente a payment.html
         res.json({
             success: true,
             referencia: nuevaRef,
-            url: `https://frontdigit.net/payment/?ref=${nuevaRef}`
+            url: `https://frontdigit.net/payment/payment.html?ref=${nuevaRef}`
         });
     } catch (error) {
         console.error('Error al crear referencia:', error.message);
