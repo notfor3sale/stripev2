@@ -1,14 +1,22 @@
-// Almacenamiento en memoria para guardar las referencias activas
+const express = require('express');
+const cors = require('cors');
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+// Almacenamiento temporal para referencias de pago
 const enlacesDePago = {};
 
-// Tus planes configurados en Whop
+// Mapeo de planes configurados en Whop
 const PLANES_WHOP = {
     "50": "plan_ZLAkMmAd62m7n",
     "599": "plan_gGxlNUyw07uXA",
     "2799": "plan_aXFJiRdgP8ip9"
 };
 
-// Función para generar códigos alfanuméricos limpios estilo "Aq6o5z8Vd5izvD"
+// Generador de cadenas alfanuméricas limpias (ej. Aq6o5z8Vd5izvD)
 function generarCodigoAleatorio(longitud = 12) {
     const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let resultado = '';
@@ -18,20 +26,23 @@ function generarCodigoAleatorio(longitud = 12) {
     return resultado;
 }
 
-// Endpoint que genera el enlace completo apuntando a /payment/?ref=...
+// Ruta raíz de verificación
+app.get('/', (req, res) => {
+    res.send('API Frontdigit - Whop Integration Active');
+});
+
+// Endpoint para crear referencias únicas dinámicas
 app.post('/api/crear-referencia', (req, res) => {
     try {
         const { monto, concepto } = req.body;
 
         const planId = PLANES_WHOP[monto];
         if (!planId) {
-            return res.status(400).json({ success: false, error: "Monto no válido. Usa 50, 599 o 2799." });
+            return res.status(400).json({ success: false, error: "Monto no válido. Elige 50, 599 o 2799." });
         }
 
-        // Genera el código único aleatorio
         const nuevaRef = generarCodigoAleatorio(12);
 
-        // Lo guarda en la memoria del servidor
         enlacesDePago[nuevaRef] = {
             planId: planId,
             nombre: concepto || `Pago FrontDigit ($${monto} MXN)`,
@@ -39,15 +50,61 @@ app.post('/api/crear-referencia', (req, res) => {
             creado: new Date()
         };
 
-        // Devuelve la URL exacta con la subcarpeta /payment/
         res.json({
             success: true,
             referencia: nuevaRef,
             url: `https://frontdigit.net/payment/?ref=${nuevaRef}`
         });
-
     } catch (error) {
         console.error('Error al crear referencia:', error.message);
-        res.status(500).json({ success: false, error: 'Error al generar enlace de pago.' });
+        res.status(500).json({ success: false, error: 'Error interno al generar enlace.' });
     }
+});
+
+// Endpoint para verificar si la referencia es válida y no ha sido usada
+app.get('/api/verificar-referencia/:ref', (req, res) => {
+    const ref = req.params.ref;
+    const enlace = enlacesDePago[ref];
+
+    if (!enlace) {
+        return res.status(404).json({ success: false, error: "El enlace de pago no existe o es inválido." });
+    }
+
+    if (enlace.usado) {
+        return res.status(400).json({ success: false, error: "Este enlace de pago ya fue utilizado y ha expirado." });
+    }
+
+    res.json({
+        success: true,
+        planId: enlace.planId,
+        nombre: enlace.nombre
+    });
+});
+
+// Webhook para procesar pagos y bloquear la referencia consumida
+app.post('/webhook-whop', (req, res) => {
+    try {
+        const event = req.body;
+        console.log('--- EVENTO WEBHOOK RECIBIDO DE WHOP ---');
+
+        if (event.action === 'payment.succeeded' || event.type === 'payment.succeeded') {
+            const paymentData = event.data;
+            const refPagada = paymentData?.metadata?.ref;
+
+            if (refPagada && enlacesDePago[refPagada]) {
+                enlacesDePago[refPagada].usado = true;
+                console.log(`Referencia ${refPagada} marcada como USADA.`);
+            }
+        }
+
+        res.status(200).json({ received: true });
+    } catch (error) {
+        console.error('Error en Webhook:', error.message);
+        res.status(500).json({ error: 'Error interno en Webhook' });
+    }
+});
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+    console.log(`Servidor activo en el puerto ${PORT}`);
 });
