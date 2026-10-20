@@ -47,7 +47,7 @@ app.post('/api/crear-referencia', (req, res) => {
 
         enlacesDePago[nuevaRef] = {
             planId: planId,
-            nombre: concepto || `Pago FrontDigit ($${monto} MXN)`,
+            nombre: concepto || `Payment ($${monto} MXN)`,
             usado: false,
             creado: new Date()
         };
