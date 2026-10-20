@@ -50,11 +50,13 @@ app.post('/api/crear-referencia', (req, res) => {
             creado: new Date()
         };
 
-        // Actualizado para apuntar explícitamente a payment.html
+        // 🟢 LOG DE ÉXITO AL GENERAR ENLACE
+        console.log(`[ÉXITO] Enlace generado correctamente -> Ref: ${nuevaRef} | Monto: $${monto} MXN`);
+
         res.json({
             success: true,
             referencia: nuevaRef,
-            url: `https://frontdigit.net/payment/payment.html?ref=${nuevaRef}`
+            url: `https://frontdigit.net/payment/?ref=${nuevaRef}`
         });
     } catch (error) {
         console.error('Error al crear referencia:', error.message);
