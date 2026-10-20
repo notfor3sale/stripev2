@@ -13,9 +13,9 @@ const enlacesDePago = {};
 const PLANES_WHOP = {
     "99.97": "plan_DRkLGCX5G4zCQ",
     "1298.58": "plan_fwV1mdwQ6H5Fg",
-    "2599.00": "plan_zop6zlBii6FLf",
+    "2599": "plan_zop6zlBii6FLf",
     "4189.99": "plan_zlwuyJj8reORC",
-    "5679.00": "plan_Gmp6AQtPf8o8s",
+    "5679": "plan_Gmp6AQtPf8o8s",
     "8499.20": "plan_BWm0xc3vPc2as",
 };
 
